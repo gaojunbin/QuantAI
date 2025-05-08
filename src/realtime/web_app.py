@@ -11,6 +11,7 @@ import time
 
 from src.realtime.predictor import RealtimePredictor
 from src.realtime.data_collector import BinanceDataCollector
+from configs.config import config
 
 # 配置日志
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -192,7 +193,11 @@ def init_app(model_path: str):
     global predictor, data_collector
     
     # 初始化预测器和数据收集器
-    predictor = RealtimePredictor(model_path)
+    predictor = RealtimePredictor(
+        model_path,
+        seq_length=config.data.seq_length,
+        prediction_horizon=config.data.target_period
+    )
     data_collector = BinanceDataCollector()
     
     # 创建模板目录
