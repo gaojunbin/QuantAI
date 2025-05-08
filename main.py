@@ -65,7 +65,7 @@ def preprocess_data(args):
     
     for file in raw_files:
         logger.info(f"处理文件: {file}")
-        preprocessor.prepare_data(str(file))
+        preprocessor.prepare_data(str(file), target_period=config.data.target_period)
 
 def train_model(args):
     """训练模型"""

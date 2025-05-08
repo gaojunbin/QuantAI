@@ -60,11 +60,11 @@ class TimeSeriesTransformer(nn.Module):
             nhead=nhead,
             dim_feedforward=dim_feedforward,
             dropout=dropout,
-            batch_first=True
+            batch_first=True,
         )
         self.transformer_encoder = nn.TransformerEncoder(
             encoder_layer,
-            num_layers=num_encoder_layers
+            num_layers=num_encoder_layers,
         )
         
         # 输出层
@@ -87,14 +87,19 @@ class TimeSeriesTransformer(nn.Module):
         Returns:
             输出张量，形状为 [batch_size, 1]
         """
+
         # 输入投影
         x = self.input_projection(x)  # [batch_size, seq_len, d_model]
         
+        x = x.permute(1, 0, 2)  # [seq_len, batch_size, d_model]
         # 位置编码
         x = self.pos_encoder(x)
         
+        x = x.permute(1, 0, 2)  # [batch_size, seq_len, d_model]
+        
         # Transformer编码
         x = self.transformer_encoder(x, mask)
+
         
         # 只使用最后一个时间步的输出
         x = x[:, -1, :]  # [batch_size, d_model]

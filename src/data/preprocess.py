@@ -66,7 +66,7 @@ class DataPreprocessor:
         
         Args:
             df: 原始数据DataFrame
-            target_period: 预测周期（小时）
+            target_period: 预测周期
             
         Returns:
             添加了目标变量的DataFrame
@@ -106,7 +106,7 @@ class DataPreprocessor:
         
         Args:
             input_file: 输入文件路径
-            target_period: 预测周期（小时）
+            target_period: 预测周期
         """
         try:
             # 加载数据

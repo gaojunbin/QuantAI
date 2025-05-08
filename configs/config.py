@@ -6,15 +6,16 @@ from pathlib import Path
 class DataConfig:
     """数据配置"""
     # 数据获取配置
-    symbol: str = 'BTCUSDT'
-    interval: str = '1h'
-    start_date: str = '2023-01-01'
-    end_date: Optional[str] = None
+    symbol: str = 'BNBUSDT'
+    interval: str = '1m'
+    start_date: str = '2024-04-01'
+    end_date: Optional[str] = '2025-04-01'
     
     # 数据预处理配置
     seq_length: int = 24
+    target_period: int = 24
     train_ratio: float = 0.8
-    batch_size: int = 32
+    batch_size: int = 1280
     
     # 特征配置
     feature_columns: List[str] = field(default_factory=lambda: [
