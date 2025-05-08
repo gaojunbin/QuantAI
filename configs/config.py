@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Optional
 from pathlib import Path
 
@@ -17,11 +17,11 @@ class DataConfig:
     batch_size: int = 32
     
     # 特征配置
-    feature_columns: List[str] = [
+    feature_columns: List[str] = field(default_factory=lambda: [
         'open', 'high', 'low', 'close', 'volume',
         'sma_20', 'sma_50', 'ema_20', 'rsi', 'macd',
         'bb_high', 'bb_low', 'obv'
-    ]
+    ])
     
     # 数据目录
     data_dir: Path = Path('data')

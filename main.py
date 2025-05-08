@@ -2,6 +2,7 @@ import logging
 from pathlib import Path
 import argparse
 from datetime import datetime
+import torch
 
 from src.data.fetch_data import BinanceDataFetcher
 from src.data.preprocess import DataPreprocessor
@@ -143,17 +144,28 @@ def evaluate_model(args):
         logger.info(f"{metric_name}: {value:.4f}")
     
     # 生成交易报告
+    # 兼容 torch.utils.data.Subset 与普通 Dataset
+    if isinstance(val_loader.dataset, torch.utils.data.Subset):
+        subset = val_loader.dataset
+        actual_returns = subset.dataset.targets[subset.indices].numpy()
+        prices = subset.dataset.data[subset.indices, 3].numpy()  # 使用收盘价
+    else:
+        actual_returns = val_loader.dataset.targets.numpy()
+        prices = val_loader.dataset.data[:, 3].numpy()           # 使用收盘价
+
+    predictions = (probs > 0.5).astype(int)
+
     report = generate_trading_report(
-        predictions=(probs > 0.5).astype(int),
-        actual_returns=val_loader.dataset.targets.numpy(),
-        prices=val_loader.dataset.data[:, 3].numpy(),  # 使用收盘价
+        predictions=predictions,
+        actual_returns=actual_returns,
+        prices=prices,
         save_path=config.trading.trading_report_path
     )
     
     # 绘制权益曲线
     plot_equity_curve(
-        returns=val_loader.dataset.targets.numpy(),
-        predictions=(probs > 0.5).astype(int),
+        returns=actual_returns,
+        predictions=predictions,
         save_path=config.trading.equity_curve_path
     )
 

@@ -54,6 +54,8 @@ def calculate_win_rate(predictions: np.ndarray, actual_returns: np.ndarray) -> f
     Returns:
         胜率
     """
+    predictions = np.asarray(predictions).ravel()
+    actual_returns = np.asarray(actual_returns).ravel()
     correct_predictions = np.sum((predictions == 1) & (actual_returns > 0) | 
                                (predictions == 0) & (actual_returns <= 0))
     return correct_predictions / len(predictions)
@@ -69,6 +71,8 @@ def calculate_profit_factor(predictions: np.ndarray, actual_returns: np.ndarray)
     Returns:
         盈亏比
     """
+    predictions = np.asarray(predictions).ravel()
+    actual_returns = np.asarray(actual_returns).ravel()
     # 计算盈利和亏损
     profits = actual_returns[(predictions == 1) & (actual_returns > 0)]
     losses = actual_returns[(predictions == 1) & (actual_returns <= 0)]
@@ -101,7 +105,7 @@ def calculate_trading_metrics(predictions: np.ndarray,
     # 计算各项指标
     metrics = {
         'total_return': cumulative_returns[-1] - 1,
-        'annual_return': (cumulative_returns[-1] ** (252 / len(returns)) - 1),
+        'annual_return': (cumulative_returns[-1] ** (252 / len(strategy_returns)) - 1),
         'sharpe_ratio': calculate_sharpe_ratio(strategy_returns),
         'max_drawdown': calculate_max_drawdown(strategy_returns),
         'win_rate': calculate_win_rate(predictions, actual_returns),
@@ -124,19 +128,27 @@ def plot_equity_curve(returns: np.ndarray,
         save_path: 图像保存路径
     """
     import matplotlib.pyplot as plt
+
+    returns = np.asarray(returns, dtype=np.float64).ravel()
+    if predictions is not None:
+        predictions = np.asarray(predictions).ravel()
     
-    # 计算累积收益率
+    # 计算累积收益率（使用对数累积避免浮点溢出）
     if predictions is not None:
         strategy_returns = returns * (2 * predictions - 1)
     else:
         strategy_returns = returns
     
-    cumulative_returns = (1 + strategy_returns).cumprod()
+    # 使用 log1p / exp 累积，处理小于等于 -1 的极端值，避免 -inf
+    strategy_returns_safe = np.clip(strategy_returns, -0.999999, None)
+    returns_safe = np.clip(returns, -0.999999, None)
+    cumulative_returns = np.exp(np.log1p(strategy_returns_safe).cumsum())
+    cumulative_buy_hold = np.exp(np.log1p(returns_safe).cumsum())
     
     # 绘制权益曲线
     plt.figure(figsize=(12, 6))
     plt.plot(cumulative_returns, label='Strategy')
-    plt.plot((1 + returns).cumprod(), label='Buy & Hold', alpha=0.5)
+    plt.plot(cumulative_buy_hold, label='Buy & Hold', alpha=0.5)
     plt.title(title)
     plt.xlabel('Trading Days')
     plt.ylabel('Cumulative Return')
