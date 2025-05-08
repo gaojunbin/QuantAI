@@ -43,7 +43,7 @@ class ModelConfig:
     
     # 训练配置
     learning_rate: float = 0.001
-    n_epochs: int = 50
+    n_epochs: int = 200
     
     # 模型保存配置
     model_dir: Path = Path('models')

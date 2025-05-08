@@ -11,3 +11,5 @@ joblib
 python-dateutil 
 requests 
 seaborn
+flask
+plotly
