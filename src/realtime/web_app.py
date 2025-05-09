@@ -8,6 +8,7 @@ import logging
 from typing import Dict, List
 import threading
 import time
+import os
 
 from src.realtime.predictor import RealtimePredictor
 from src.realtime.data_collector import BinanceDataCollector
@@ -17,7 +18,9 @@ from configs.config import config
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-app = Flask(__name__)
+# 创建Flask应用
+app = Flask(__name__, 
+           template_folder=os.path.join(os.path.dirname(os.path.abspath(__file__)), 'templates'))
 
 # 全局变量
 predictor = None
@@ -40,8 +43,8 @@ def create_price_chart(symbol: str, prediction_time: datetime, current_price: fl
     # 获取历史数据
     df = data_collector.get_historical_klines(
         symbol=symbol,
-        interval='1h',
-        lookback_periods=24
+        interval=config.data.interval,
+        lookback_periods=config.data.seq_length
     )
     
     # 创建图表
@@ -77,6 +80,7 @@ def create_price_chart(symbol: str, prediction_time: datetime, current_price: fl
     
     return fig.to_html(full_html=False)
 
+
 def prediction_worker():
     """
     预测工作线程
@@ -86,23 +90,20 @@ def prediction_worker():
     while not stop_prediction:
         try:
             # 进行预测
-            result = predictor.make_prediction('BTCUSDT')
+            result = predictor.make_prediction(
+                config.data.symbol,
+                config.data.interval
+            )
             
-            # 等待预测时间到达
-            prediction_time = datetime.fromisoformat(result['prediction_time'])
-            wait_time = prediction_time + timedelta(hours=predictor.prediction_horizon)
+            # 等待一段时间再进行下一次预测
+            time.sleep(60)  # 每分钟进行一次预测
             
-            while datetime.now() < wait_time and not stop_prediction:
-                time.sleep(60)  # 每分钟检查一次
-            
-            if not stop_prediction:
-                # 验证预测结果
-                prediction_id = f"{result['symbol']}_{result['prediction_time']}"
-                predictor.verify_prediction(prediction_id)
-            
+        except ValueError as e:
+            logger.error(f"数据验证失败: {str(e)}")
+            time.sleep(300)  # 数据验证失败时等待5分钟再重试
         except Exception as e:
             logger.error(f"预测工作线程发生错误: {str(e)}")
-            time.sleep(60)  # 发生错误时等待一分钟再继续
+            time.sleep(60)  # 其他错误时等待1分钟再重试
 
 @app.route('/')
 def index():
@@ -201,16 +202,18 @@ def init_app(model_path: str):
     data_collector = BinanceDataCollector()
     
     # 创建模板目录
-    templates_dir = Path('templates')
+    templates_dir = Path(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'templates'))
     templates_dir.mkdir(exist_ok=True)
     
     # 创建主页模板
-    with open(templates_dir / 'index.html', 'w', encoding='utf-8') as f:
-        f.write('''
+    template_path = templates_dir / 'index.html'
+    if not template_path.exists():
+        with open(template_path, 'w', encoding='utf-8') as f:
+            f.write('''
 <!DOCTYPE html>
 <html>
 <head>
-    <title>加密货币预测系统</title>
+    <title>Quant AI 价格趋势预测系统</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
     <style>
@@ -224,7 +227,7 @@ def init_app(model_path: str):
 </head>
 <body>
     <div class="container mt-4">
-        <h1 class="mb-4">加密货币预测系统</h1>
+        <h1 class="mb-4">Quant AI 价格趋势预测系统</h1>
         
         <!-- 控制按钮 -->
         <div class="row mb-4">
@@ -347,7 +350,7 @@ def init_app(model_path: str):
     </script>
 </body>
 </html>
-        ''')
+            ''')
     
     return app
 

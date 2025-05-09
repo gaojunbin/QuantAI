@@ -23,6 +23,12 @@ class DataPreprocessor:
         self.raw_dir = self.data_dir / 'raw'
         self.processed_dir = self.data_dir / 'processed'
         self.processed_dir.mkdir(parents=True, exist_ok=True)
+        self.scaler_file = self.processed_dir / 'scaler.joblib'
+        self.feature_columns = [
+            'open', 'high', 'low', 'close', 'volume',
+            'sma_20', 'sma_50', 'ema_20', 'rsi', 'macd',
+            'bb_high', 'bb_low', 'obv'
+        ]
         
     def load_data(self, file_path: str) -> pd.DataFrame:
         """加载原始数据"""
@@ -99,6 +105,43 @@ class DataPreprocessor:
         scaler = StandardScaler()
         df[feature_columns] = scaler.fit_transform(df[feature_columns])
         return df, scaler
+
+    def save_scaler(self, scaler: StandardScaler, save_path: str):
+        """
+        保存scaler对象
+        
+        Args:
+            scaler: 要保存的StandardScaler对象
+            save_path: 保存路径
+        """
+        joblib.dump(scaler, save_path)
+        
+    def load_scaler(self, load_path: str) -> StandardScaler:
+        """
+        加载scaler对象
+        
+        Args:
+            load_path: scaler文件路径
+            
+        Returns:
+            加载的StandardScaler对象
+        """
+        return joblib.load(load_path)
+        
+    def transform_features(self, df: pd.DataFrame, feature_columns: List[str], scaler: StandardScaler) -> pd.DataFrame:
+        """
+        使用已有的scaler转换特征
+        
+        Args:
+            df: 原始数据DataFrame
+            feature_columns: 需要标准化的特征列名列表
+            scaler: 已训练好的StandardScaler对象
+            
+        Returns:
+            标准化后的DataFrame
+        """
+        df[feature_columns] = scaler.transform(df[feature_columns])
+        return df
     
     def prepare_data(self, input_file: str, target_period: int = 24) -> None:
         """
@@ -125,16 +168,9 @@ class DataPreprocessor:
             logger.info("处理缺失值...")
             df = self.handle_missing_values(df)
             
-            # 定义特征列
-            feature_columns = [
-                'open', 'high', 'low', 'close', 'volume',
-                'sma_20', 'sma_50', 'ema_20', 'rsi', 'macd',
-                'bb_high', 'bb_low', 'obv'
-            ]
-            
             # 标准化特征
             logger.info("标准化特征...")
-            df, scaler = self.normalize_features(df, feature_columns)
+            df, scaler = self.normalize_features(df, self.feature_columns)
             
             # 保存处理后的数据
             output_file = self.processed_dir / f"processed_{Path(input_file).name}"
@@ -142,9 +178,8 @@ class DataPreprocessor:
             logger.info(f"处理后的数据已保存到: {output_file}")
             
             # 保存scaler
-            scaler_file = self.processed_dir / 'scaler.joblib'
-            joblib.dump(scaler, scaler_file)
-            logger.info(f"Scaler已保存到: {scaler_file}")
+            self.save_scaler(scaler, self.scaler_file)
+            logger.info(f"Scaler已保存到: {self.scaler_file}")
             
         except Exception as e:
             logger.error(f"数据预处理过程中发生错误: {str(e)}")

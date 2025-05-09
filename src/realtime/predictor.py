@@ -10,6 +10,7 @@ from pathlib import Path
 
 from src.models.transformer import TimeSeriesTransformer
 from src.realtime.data_collector import BinanceDataCollector
+from configs.config import config
 
 # 配置日志
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -18,33 +19,36 @@ logger = logging.getLogger(__name__)
 class RealtimePredictor:
     def __init__(self,
                  model_path: str,
-                 seq_length: int = 24,
-                 prediction_horizon: int = 1,
+                 seq_length: int = None,
+                 prediction_horizon: int = None,
                  device: str = 'cuda' if torch.cuda.is_available() else 'cpu'):
         """
         初始化实时预测器
         
         Args:
             model_path: 模型权重文件路径
-            seq_length: 序列长度
-            prediction_horizon: 预测时间跨度（小时）
+            seq_length: 序列长度（如果为None，则使用配置文件中的值）
+            prediction_horizon: 预测时间跨度（小时）（如果为None，则使用配置文件中的值）
             device: 运行设备
         """
-        self.seq_length = seq_length
-        self.prediction_horizon = prediction_horizon
+        self.seq_length = seq_length or config.data.seq_length
+        self.prediction_horizon = prediction_horizon or config.data.target_period
         self.device = device
-        
-        # 加载模型
+
         self.model = TimeSeriesTransformer(
-            input_dim=13,
-            d_model=64,
-            nhead=8,
-            num_encoder_layers=3,
-            dim_feedforward=256,
-            dropout=0.1,
-            max_seq_length=seq_length
+            input_dim=len(config.data.feature_columns),
+            d_model=config.model.d_model,
+            nhead=config.model.nhead,
+            num_encoder_layers=config.model.num_encoder_layers,
+            dim_feedforward=config.model.dim_feedforward,
+            dropout=config.model.dropout,
+            max_seq_length=config.model.max_seq_length
         )
-        self.model.load_state_dict(torch.load(model_path))
+        
+        # 加载模型权重
+        state_dict = torch.load(model_path)
+
+        self.model.load_state_dict(state_dict)
         self.model.to(device)
         self.model.eval()
         
@@ -76,13 +80,18 @@ class RealtimePredictor:
         Args:
             symbol: 交易对符号
             interval: K线间隔
+            seq_length: 序列长度
             
         Returns:
             预测结果字典
+            
+        Raises:
+            ValueError: 当数据不足或处理失败时
         """
         try:
+            lookback_periods = self.seq_length + 100
             # 收集数据
-            df = self.data_collector.collect_realtime_data(symbol, interval)
+            df = self.data_collector.collect_realtime_data(symbol, interval, lookback_periods)
             
             # 准备输入数据
             input_data = self.prepare_input_data(df)
@@ -94,7 +103,7 @@ class RealtimePredictor:
             with torch.no_grad():
                 output = self.model(input_data)
                 prediction = (output > 0.5).float().item()
-                confidence = output.item()
+                confidence = output.item() if output > 0.5 else 1-output.item()
             
             # 记录预测时间
             prediction_time = datetime.now()
@@ -109,7 +118,7 @@ class RealtimePredictor:
                 'prediction_horizon': self.prediction_horizon,
                 'verified': False,
                 'actual_direction': None,
-                'is_correct': None
+                'is_correct': None,
             }
             
             # 保存预测结果
@@ -117,6 +126,9 @@ class RealtimePredictor:
             
             return result
             
+        except ValueError as e:
+            logger.error(f"数据验证失败: {str(e)}")
+            raise
         except Exception as e:
             logger.error(f"预测过程中发生错误: {str(e)}")
             raise
