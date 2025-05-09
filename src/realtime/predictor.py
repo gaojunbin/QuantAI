@@ -213,7 +213,7 @@ class RealtimePredictor:
         
         if not verified_predictions:
             return {
-                'total_predictions': 0,
+                'total_predictions': len(predictions),
                 'verified_predictions': 0,
                 'accuracy': 0.0,
                 'correct_predictions': 0,
