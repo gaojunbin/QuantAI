@@ -28,58 +28,6 @@ data_collector = None
 prediction_thread = None
 stop_prediction = False
 
-def create_price_chart(symbol: str, prediction_time: datetime, current_price: float) -> str:
-    """
-    创建价格图表
-    
-    Args:
-        symbol: 交易对符号
-        prediction_time: 预测时间
-        current_price: 当前价格
-        
-    Returns:
-        图表的HTML字符串
-    """
-    # 获取历史数据
-    df = data_collector.get_historical_klines(
-        symbol=symbol,
-        interval=config.data.interval,
-        lookback_periods=config.data.seq_length
-    )
-    
-    # 创建图表
-    fig = go.Figure()
-    
-    # 添加价格线
-    fig.add_trace(go.Scatter(
-        x=df.index,
-        y=df['close'],
-        mode='lines',
-        name='价格'
-    ))
-    
-    # 添加预测点
-    fig.add_trace(go.Scatter(
-        x=[prediction_time],
-        y=[current_price],
-        mode='markers',
-        marker=dict(
-            size=10,
-            color='red'
-        ),
-        name='预测点'
-    ))
-    
-    # 设置布局
-    fig.update_layout(
-        title=f'{symbol} 价格走势',
-        xaxis_title='时间',
-        yaxis_title='价格',
-        template='plotly_white'
-    )
-    
-    return fig.to_html(full_html=False)
-
 
 def prediction_worker():
     """
@@ -127,27 +75,6 @@ def get_predictions():
     
     return jsonify(predictions)
 
-@app.route('/api/prediction/<prediction_id>')
-def get_prediction(prediction_id):
-    """
-    获取单个预测详情
-    """
-    try:
-        result = predictor._load_prediction(prediction_id)
-        
-        # 创建价格图表
-        prediction_time = datetime.fromisoformat(result['prediction_time'])
-        chart_html = create_price_chart(
-            result['symbol'],
-            prediction_time,
-            result['current_price']
-        )
-        
-        result['chart_html'] = chart_html
-        return jsonify(result)
-        
-    except Exception as e:
-        return jsonify({'error': str(e)}), 404
 
 @app.route('/api/stats')
 def get_stats():
@@ -295,24 +222,10 @@ def init_app(model_path: str):
                                     <p>实际方向: ${prediction.actual_direction === 1 ? '上涨' : '下跌'}</p>
                                     <p>预测结果: ${prediction.is_correct ? '正确' : '错误'}</p>
                                 ` : '<p>等待验证...</p>'}
-                                <div id="chart-${prediction.symbol}_${prediction.prediction_time}"></div>
                             </div>
                         </div>
                     `).join('');
                     document.getElementById('predictions').innerHTML = predictionsHtml;
-                    
-                    // 加载每个预测的图表
-                    predictions.forEach(prediction => {
-                        const predictionId = `${prediction.symbol}_${prediction.prediction_time}`;
-                        fetch(`/api/prediction/${predictionId}`)
-                            .then(response => response.json())
-                            .then(data => {
-                                const chartDiv = document.getElementById(`chart-${predictionId}`);
-                                if (chartDiv) {
-                                    chartDiv.innerHTML = data.chart_html;
-                                }
-                            });
-                    });
                 });
         }
         

@@ -84,24 +84,10 @@
                                     <p>实际方向: ${prediction.actual_direction === 1 ? '上涨' : '下跌'}</p>
                                     <p>预测结果: ${prediction.is_correct ? '正确' : '错误'}</p>
                                 ` : '<p>等待验证...</p>'}
-                                <div id="chart-${prediction.symbol}_${prediction.prediction_time}"></div>
                             </div>
                         </div>
                     `).join('');
                     document.getElementById('predictions').innerHTML = predictionsHtml;
-                    
-                    // 加载每个预测的图表
-                    predictions.forEach(prediction => {
-                        const predictionId = `${prediction.symbol}_${prediction.prediction_time}`;
-                        fetch(`/api/prediction/${predictionId}`)
-                            .then(response => response.json())
-                            .then(data => {
-                                const chartDiv = document.getElementById(`chart-${predictionId}`);
-                                if (chartDiv) {
-                                    chartDiv.innerHTML = data.chart_html;
-                                }
-                            });
-                    });
                 });
         }
         
