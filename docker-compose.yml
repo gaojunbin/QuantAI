@@ -11,12 +11,21 @@ services:
       - PYTHONPATH=/app
     command: python src/realtime/web_app.py
     restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
 
   verifier:
     build: .
+    volumes:
+      - ./:/app/
     environment:
       - PYTHONPATH=/app
     command: python src/realtime/verifier.py
     restart: unless-stopped
     depends_on:
-      - web 
+      - web

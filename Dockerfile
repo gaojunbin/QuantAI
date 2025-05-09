@@ -10,15 +10,9 @@ RUN apt-get update && apt-get install -y \
 
 # 复制项目文件
 COPY requirements.txt .
-COPY src/ src/
-COPY configs/ configs/
-COPY models/ models/
 
 # 安装Python依赖
 RUN pip install --no-cache-dir -r requirements.txt
-
-# 创建数据目录
-RUN mkdir -p data/predictions
 
 # 设置环境变量
 ENV PYTHONPATH=/app
