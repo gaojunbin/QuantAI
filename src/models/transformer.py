@@ -25,31 +25,24 @@ class PositionalEncoding(nn.Module):
 class TimeSeriesTransformer(nn.Module):
     def __init__(self, 
                  input_dim: int,
-                 d_model: int = 64,
+                 d_model: int = 128,
                  nhead: int = 8,
-                 num_encoder_layers: int = 3,
-                 dim_feedforward: int = 256,
-                 dropout: float = 0.1,
+                 num_encoder_layers: int = 4,
+                 dim_feedforward: int = 512,
+                 dropout: float = 0.2,
                  max_seq_length: int = 100):
-        """
-        初始化时间序列Transformer模型
-        
-        Args:
-            input_dim: 输入特征维度
-            d_model: Transformer模型维度
-            nhead: 注意力头数
-            num_encoder_layers: 编码器层数
-            dim_feedforward: 前馈网络维度
-            dropout: Dropout比率
-            max_seq_length: 最大序列长度
-        """
         super().__init__()
         
         self.input_dim = input_dim
         self.d_model = d_model
         
-        # 输入投影层
-        self.input_projection = nn.Linear(input_dim, d_model)
+        # 特征提取层
+        self.feature_extraction = nn.Sequential(
+            nn.Linear(input_dim, d_model),
+            nn.LayerNorm(d_model),
+            nn.ReLU(),
+            nn.Dropout(dropout)
+        )
         
         # 位置编码
         self.pos_encoder = PositionalEncoding(d_model, max_seq_length)
@@ -61,53 +54,82 @@ class TimeSeriesTransformer(nn.Module):
             dim_feedforward=dim_feedforward,
             dropout=dropout,
             batch_first=True,
+            activation='gelu'
         )
         self.transformer_encoder = nn.TransformerEncoder(
             encoder_layer,
             num_layers=num_encoder_layers,
         )
         
-        # 输出层
-        self.output_layer = nn.Sequential(
+        # 多头注意力层
+        self.multihead_attn = nn.MultiheadAttention(
+            embed_dim=d_model,
+            num_heads=nhead,
+            dropout=dropout,
+            batch_first=True
+        )
+        
+        # 价格预测层
+        self.price_prediction = nn.Sequential(
+            nn.Linear(d_model, 64),
+            nn.LayerNorm(64),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(64, 32),
+            nn.LayerNorm(32),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(32, 1)  # 预测具体价格
+        )
+        
+        # 波动率预测层
+        self.volatility_prediction = nn.Sequential(
             nn.Linear(d_model, 32),
+            nn.LayerNorm(32),
             nn.ReLU(),
             nn.Dropout(dropout),
             nn.Linear(32, 1),
-            nn.Sigmoid()
+            nn.Softplus()  # 确保波动率为正
         )
         
-    def forward(self, x: torch.Tensor, mask: torch.Tensor = None) -> torch.Tensor:
-        """
-        前向传播
+        # 趋势强度预测层
+        self.trend_prediction = nn.Sequential(
+            nn.Linear(d_model, 32),
+            nn.LayerNorm(32),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(32, 1),
+            nn.Sigmoid()  # 输出0-1之间的趋势强度
+        )
         
-        Args:
-            x: 输入张量，形状为 [batch_size, seq_len, input_dim]
-            mask: 注意力掩码，形状为 [seq_len, seq_len]
-            
-        Returns:
-            输出张量，形状为 [batch_size, 1]
-        """
-
-        # 输入投影
-        x = self.input_projection(x)  # [batch_size, seq_len, d_model]
+    def forward(self, x: torch.Tensor, mask: torch.Tensor = None) -> dict:
+        # 特征提取
+        x = self.feature_extraction(x)
         
-        x = x.permute(1, 0, 2)  # [seq_len, batch_size, d_model]
-        # 位置编码
+        x = x.permute(1, 0, 2)
         x = self.pos_encoder(x)
-        
-        x = x.permute(1, 0, 2)  # [batch_size, seq_len, d_model]
+        x = x.permute(1, 0, 2)
         
         # Transformer编码
         x = self.transformer_encoder(x, mask)
-
+        
+        # 多头注意力
+        attn_output, _ = self.multihead_attn(x, x, x)
+        x = x + attn_output
         
         # 只使用最后一个时间步的输出
-        x = x[:, -1, :]  # [batch_size, d_model]
+        x = x[:, -1, :]
         
-        # 输出层
-        x = self.output_layer(x)  # [batch_size, 1]
+        # 多任务预测
+        price = self.price_prediction(x)
+        volatility = self.volatility_prediction(x)
+        trend = self.trend_prediction(x)
         
-        return x
+        return {
+            'price': price,
+            'volatility': volatility,
+            'trend': trend
+        }
 
 class TimeSeriesDataset(torch.utils.data.Dataset):
     def __init__(self, 
